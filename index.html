@@ -673,6 +673,10 @@ if(allBosses.length > 0){
 let box=document.getElementById("todayBox");
 
 box.innerHTML=`
+<div style="margin-bottom:8px; font-size:13px; color:#aaa; letter-spacing:1px;">
+    BOSS RESPAWNS TODAY
+</div>
+
 <div class="today-header">
 <div>BOSS</div><div>STATUS</div><div>RESPAWN</div><div>COUNTDOWN</div><div>TOD</div><div></div>
 </div>`;
@@ -686,7 +690,7 @@ todayList.forEach(b=>{
         <div class="status today">TODAY</div>
         <div>${format(b.time)}</div>
         <div>${cd(b.time)}</div>
-        <div>${loadTOD(b.name)||"--"}</div>
+        <div>${formatTODDisplay(loadTOD(b.name))}</div>
         <div></div>
     </div>`;
 });
