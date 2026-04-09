@@ -649,7 +649,7 @@ function build(title,data,container,isDynamic=false){
     value="${loadTOD(b.name)}"
     onchange="saveTOD('${b.name}',this.value)">` : "--"}
         </div>
-       ${isDynamic ? `
+       ${isDynamic && isAdmin ? `
     <button onclick="setNow('${b.name}')">Killed Now</button>
 ` : ""}
         `;
