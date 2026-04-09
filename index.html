@@ -723,17 +723,18 @@ if(n){
 if(n){
     let minutesLeft = diff / 60;
 
+    // 🔔 PUSH TO ALL USERS
     if(minutesLeft <= 5 && minutesLeft > 0){
+
         if(!notifiedBosses[b.name]){
-            sendNotification(
-                "Boss Incoming!",
-                b.name + " spawning in less than 5 minutes!"
-            );
+
+            sendPushToAll(b.name + " spawning soon!");
+
             notifiedBosses[b.name] = true;
         }
     }
 
-    // reset so it can notify again next cycle
+    // reset
     if(minutesLeft > 10){
         notifiedBosses[b.name] = false;
     }
@@ -773,7 +774,8 @@ else if(diff > 0 && diff <= 300){
     }
 
     // 🔥 PRIORITY 3: TODAY (normal today bosses)
-    else if(n.getDay() === today){
+    else if(n.getDay() === today && diff <= 7200){ // 2 HOURS ONLY
+
         status = "TODAY";
         row.classList.add("today");
 
@@ -868,6 +870,35 @@ todayList.forEach(b=>{
 
 }
 
+function sendPushToAll(message){
+
+    db.ref("tokens").once("value", snapshot => {
+
+        snapshot.forEach(child => {
+
+            let token = child.key;
+
+            fetch("https://fcm.googleapis.com/fcm/send", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "key=YOUR_SERVER_KEY_HERE"
+                },
+                body: JSON.stringify({
+                    to: token,
+                    notification: {
+                        title: "Boss Alert",
+                        body: message,
+                        icon: "logo.png"
+                    }
+                })
+            });
+
+        });
+
+    });
+
+}
 setInterval(update,1000);
 </script>
 
