@@ -893,24 +893,44 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 const messaging = firebase.messaging();
-
 const VAPID_KEY = "7f8hbNd4lbq-FZPrc29KX7fSk3K4FBApQRHDr0Ji9Ds";
 
-messaging.getToken({ vapidKey: VAPID_KEY })
-.then((currentToken) => {
-    if (currentToken) {
-        console.log("FCM Token:", currentToken);
+// 🔥 REGISTER SW FIRST (IMPORTANT)
+navigator.serviceWorker.register('/boss-timer/firebase-messaging-sw.js')
+.then((registration) => {
 
-        // 🔥 SAVE TOKEN (you can store in Firebase)
-        db.ref("tokens/" + currentToken).set(true);
+    console.log("✅ SW READY");
 
-    } else {
-        console.log("No registration token available.");
-    }
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+
+            messaging.getToken({
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: registration // 🔥 CRITICAL FIX
+            })
+            .then((currentToken) => {
+                if (currentToken) {
+                    console.log("🔥 FCM Token:", currentToken);
+
+                    // SAVE TOKEN
+                    db.ref("tokens/" + currentToken).set(true);
+
+                } else {
+                    console.log("No registration token available.");
+                }
+            })
+            .catch((err) => {
+                console.log("❌ Token error:", err);
+            });
+
+        } else {
+            console.log("❌ Permission denied");
+        }
+    });
+
 })
-.catch((err) => {
-    console.log("An error occurred while retrieving token.", err);
-});
+.catch(err => console.log("❌ SW REG ERROR:", err));
+
 
 // ✅ SINGLE CLEAN LISTENER
 db.ref("bosses").on("value", snapshot => {
