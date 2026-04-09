@@ -179,7 +179,8 @@ h1{
 /* ===== GRID ===== */
 .row, .today-row, .today-header{
     display:grid;
-    grid-template-columns: 160px 90px 160px 130px 120px 90px; /* ✅ fixed widths */
+    grid-template-columns: 160px 90px 160px 130px 200px 90px;
+ /* ✅ fixed widths */
     gap:10px;
     align-items:center;
     padding:10px;
@@ -189,17 +190,18 @@ h1{
 
 .tod{
     display:flex;
-    gap:6px;
+    gap:8px;
     align-items:center;
+    flex-wrap:nowrap;     /* 👈 keep in one line */
 }
 
 .tod input{
-    width:120px;
+    width:190px;          /* 👈 longer */
+    min-width:190px;      /* 👈 prevents shrinking */
     font-size:14px;
     padding:6px;
     text-align:center;
-}
-}
+}}
 
 button{
     flex-shrink:0;
@@ -369,8 +371,8 @@ const dynamicBosses = [
 { name:"Venatus", h:10 },{ name:"Viorent", h:10 },
 { name:"Ego", h:21 },{ name:"Livera", h:24 },
 { name:"Araneo", h:24 },{ name:"Undomiel", h:24 },
-{ name:"Lady Dalia", h:18 },{ name:"General Aquleus", h:29 },
-{ name:"Amentis", h:29 },{ name:"Baron Braudmore", h:32 },
+{ name:"LadyDalia", h:18 },{ name:"GeneralAquleus", h:29 },
+{ name:"Amentis", h:29 },{ name:"BaronBraudmore", h:32 },
 { name:"Wannitas", h:48 },{ name:"Metus", h:48 },
 { name:"Duplican", h:48 },{ name:"Shuliar", h:35 },
 { name:"Gareth", h:32 },{ name:"Titore", h:37 },
@@ -410,26 +412,51 @@ function saveTOD(name, value){
 function loadTOD(name){
     return bossData[name] || "";
 }
+
+function formatTODDisplay(tod){
+    if(!tod) return "--";
+
+    let d = new Date(tod);
+
+    if(isNaN(d)) return "--";
+
+    let date = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric"
+    });
+
+    let time = d.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+
+    return `${date} • ${time}`;
+
+}
+
 // ===== CALC =====
-function nextInterval(tod,h){
-    if(!tod.includes(":")) return null;
+function nextInterval(tod, h){
+    if(!tod) return null;
 
-    let now=new Date();
-    let [t,ap]=tod.split(" ");
-    let [hh,mm]=t.split(":");
+    let now = new Date();
+    let d = new Date(tod);
 
-    hh=parseInt(hh);
-    if(ap==="PM" && hh!=12) hh+=12;
-    if(ap==="AM" && hh==12) hh=0;
+    // 🚨 FIX: invalid date guard
+    if(isNaN(d.getTime())) return null;
 
-    let d=new Date();
-    d.setHours(hh,mm,0);
+    let interval = h * 3600000;
 
-    let r=new Date(d.getTime()+h*3600000);
-    while(r<now) r=new Date(r.getTime()+h*3600000);
+    let diff = now - d;
+
+    // how many cycles passed
+    let cycles = Math.floor(diff / interval);
+
+    // next respawn
+    let r = new Date(d.getTime() + (cycles + 1) * interval);
 
     return r;
 }
+
 
 function nextSchedule(times){
 
@@ -514,8 +541,10 @@ function build(title,data,container,isDynamic=false){
         <div class="respawn" id="r_${b.name}">--</div>
         <div class="cd" id="c_${b.name}">--</div>
         <div class="tod">
-            ${isDynamic ? `<input type="time" id="tod_${b.name}" 
-value="${convertTo24(loadTOD(b.name))}"onchange="saveTime('${b.name}',this.value)">` : "--"}
+            ${isDynamic ? `<input type="datetime-local"
+    id="tod_${b.name}"
+    value="${loadTOD(b.name)}"
+    onchange="saveTOD('${b.name}',this.value)">` : "--"}
         </div>
         ${isDynamic ? `<button onclick="setNow('${b.name}')">Now</button>` : ""}
         `;
@@ -530,50 +559,19 @@ build("KRANSIA",kransiaBosses.map(([n,t])=>({name:n,times:t,type:"fix"})),kransi
 
 // ===== NOW BUTTON =====
 function setNow(name){
-    let d=new Date();
-    let h=d.getHours();
-    let m=d.getMinutes().toString().padStart(2,"0");
-    let ap=h>=12?"PM":"AM";
-    h=h%12||12;
-    saveTOD(name,`${h}:${m} ${ap}`);
-    
+    let d = new Date();
+
+    let year = d.getFullYear();
+    let month = String(d.getMonth()+1).padStart(2,"0");
+    let day = String(d.getDate()).padStart(2,"0");
+    let hour = String(d.getHours()).padStart(2,"0");
+    let min = String(d.getMinutes()).padStart(2,"0");
+
+    let value = `${year}-${month}-${day}T${hour}:${min}`;
+
+    saveTOD(name, value);
 }
 
-// Convert "1:19 AM" → "01:19"
-function convertTo24(tod){
-    if(!tod || !tod.includes(":")) return "";
-
-    let [time, ap] = tod.split(" ");
-    let [h, m] = time.split(":");
-
-    h = parseInt(h);
-
-    if(ap === "PM" && h !== 12) h += 12;
-    if(ap === "AM" && h === 12) h = 0;
-
-    return String(h).padStart(2,"0") + ":" + m;
-}
-
-// Convert "13:19" → "1:19 PM"
-function convertTo12(time){
-    if(!time) return "";
-
-    let [h, m] = time.split(":");
-    h = parseInt(h);
-
-    let ap = h >= 12 ? "PM" : "AM";
-    h = h % 12 || 12;
-
-    return `${h}:${m} ${ap}`;
-
-
-}
-
-// SAVE from picker
-function saveTime(name, value){
-    let formatted = convertTo12(value);
-    saveTOD(name, formatted);
-}
 
 
 // ===== UPDATE =====
@@ -637,12 +635,13 @@ sEl.className = "status " + status.toLowerCase();
 let respawnEl = document.getElementById("r_"+b.name);
 
 // ALWAYS show respawn
-let respawnText = n ? format(n) : "--";
+let respawnText = (n && !isNaN(n)) ? format(n) : "--";
 
 // ✅ ONE clean condition only
 if(b.type === "dyn" && (status === "TODAY" || status === "SOON" || status === "ALIVE")){
     
-    let tod = loadTOD(b.name) || "--";
+    let tod = formatTODDisplay(loadTOD(b.name));
+
 
     respawnEl.innerHTML = `
         <div>${respawnText}</div>
@@ -722,12 +721,11 @@ db.ref("bosses").on("value", snapshot => {
     bossData = snapshot.val() || {};
 
     Object.keys(bossData).forEach(name => {
-        const input = document.getElementById("tod_" + name);
-        if(input){
-            input.value = convertTo24(bossData[name]);
-
-        }
-    });
+    const input = document.getElementById("tod_" + name);
+    if(input){
+        input.value = bossData[name];
+    }
+});
 
     update(); // instant refresh
 });
