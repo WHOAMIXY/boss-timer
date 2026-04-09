@@ -78,14 +78,43 @@
 }
 
 /* ===== SOON (RED BLINK) ===== */
-.soon::after{
+/* 🔴 STATIC RED (DEFAULT) */
+.row.soon::after{
     box-shadow:
         0 0 10px #ff4d4d,
         0 0 25px #ff4d4d,
         0 0 45px #ff4d4d;
+}
+
+/* 🔴 BLINK ONLY WHEN .blink IS ALSO PRESENT */
+.row.soon.blink::after{
     animation:glowRed 1s infinite ease-in-out;
 }
 
+/* ✅ ADD THIS RIGHT HERE 👇 */
+.today-row{
+    position:relative;
+    z-index:1;
+}
+
+.today-row.soon::after{
+    content:"";
+    position:absolute;
+    inset:-2px;
+    border-radius:12px;
+    pointer-events:none;
+
+    box-shadow:
+        0 0 10px #ff4d4d,
+        0 0 25px #ff4d4d,
+        0 0 45px #ff4d4d;
+
+    opacity:1;
+}
+
+.today-row.soon.blink::after{
+    animation:glowRed 1s infinite ease-in-out;
+}
 /* ===== ANIMATIONS ===== */
 @keyframes glowGreen{
     0%{opacity:0.2;}
@@ -244,13 +273,7 @@ button{
     font-weight:bold;
 }
 
-.today-row.soon::after{
-    box-shadow:
-        0 0 10px #ff4d4d,
-        0 0 25px #ff4d4d,
-        0 0 45px #ff4d4d;
-    animation:glowRed 1s infinite ease-in-out;
-}
+
 
 /* STATUS TEXT */
 .status::before{
@@ -490,15 +513,6 @@ function formatTODDisplay(tod){
 }
 
 
-function sendNotification(title, body){
-    if(Notification.permission === "granted"){
-        new Notification(title, {
-            body: body,
-            icon: "logo.png"
-        });
-    }
-}
-
 
 
 function loginAdmin(){
@@ -531,18 +545,17 @@ function nextInterval(tod, h){
     let now = new Date();
     let d = new Date(tod);
 
-    // 🚨 FIX: invalid date guard
+    // 🚨 invalid date protection
     if(isNaN(d.getTime())) return null;
 
     let interval = h * 3600000;
 
-    let diff = now - d;
+    let r = new Date(d);
 
-    // how many cycles passed
-    let cycles = Math.floor(diff / interval);
-
-    // next respawn
-    let r = new Date(d.getTime() + (cycles + 1) * interval);
+    // 🔥 LOOP instead of math (more accurate)
+    while(r <= now){
+        r = new Date(r.getTime() + interval);
+    }
 
     return r;
 }
@@ -692,14 +705,15 @@ if(n){
 }
 
     let row=document.getElementById("row_"+b.name);
-    row.classList.remove("alive","today","soon","next");
+    row.classList.remove("alive","today","soon","next","blink");
+
 
     let diff=n?(n-new Date())/1000:null;
     // 🔔 5 MINUTES WARNING
 if(n){
     let minutesLeft = diff / 60;
 
-    if(minutesLeft <= 5 && minutesLeft > 4.5){
+    if(minutesLeft <= 5 && minutesLeft > 0){
         if(!notifiedBosses[b.name]){
             sendNotification(
                 "Boss Incoming!",
@@ -734,10 +748,12 @@ if(n){
     }
 
     // 🔥 PRIORITY 2: SOON (≤5 min BEFORE)
-    else if(diff > 0 && diff <= 300){
-        status = "SOON";
-        row.classList.add("soon");
+else if(diff > 0 && diff <= 300){
+    status = "SOON";
 
+    // ❌ NO BLINK for dynamic list
+    row.classList.add("soon");
+    row.classList.remove("blink");
         todayList.push({
             name: b.name,
             time: n,
@@ -822,10 +838,14 @@ todayList.sort((a,b)=>a.time-b.time);
 
 todayList.forEach(b=>{
     box.innerHTML+=`
-    <div class="today-row">
+    <div class="today-row ${b.status.toLowerCase()} ${b.status === "SOON" ? "blink" : ""}">
+
+
         <div class="name">${b.name}</div>
 
         <div class="status ${b.status.toLowerCase()} ${b.status === "SOON" ? "blink" : ""}">
+
+
             ${b.status}
         </div>
 
