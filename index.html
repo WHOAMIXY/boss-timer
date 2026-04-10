@@ -569,10 +569,15 @@ function loginAdmin(){
     db.ref("users/" + name).once("value").then(snap => {
         let user = snap.val();
 
+        console.log("USER DATA:", user);
+
         if(user && user.password === pass){
 
             currentUser = name;
             userRole = user.role;
+
+            console.log("ROLE:", userRole);
+
 
             alert("Welcome " + name + " (" + userRole + ")");
 
