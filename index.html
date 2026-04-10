@@ -122,16 +122,25 @@
 /* ===== GLOBAL ===== */
 body{
     margin:0;
-    background:#0b0e14;
+    background: url('wallpaper.jpeg') center/cover no-repeat fixed;
     font-family:'Segoe UI','Inter',sans-serif;
     color:#eee;
     display:flex;
     justify-content:center;
 }
 
+/* 🔥 DARK OVERLAY (PUT RIGHT UNDER body) */
+body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.65);
+    z-index:0;
+}
+
 .container{
-    width:950px;
-    padding:20px;
+    position:relative;
+    z-index:1;
 }
 
 /* ===== HEADER ===== */
@@ -273,8 +282,10 @@ button{
 .status.alive::before{ background:#00ff9c; }
 .status.today::before{ background:#ffd54f; }
 .status.soon::before{ background:#ff4d4d; }
-.status.wait::before{ background:#888; }
+.status.scheduled::before{ background:#888; }
 .status.set::before{ background:#555; }
+.status.tomorrow::before{ background:#00b0ff; }
+.tomorrow{ border-left-color:#00b0ff; }
 
 /* BLINK */
 .blink{
@@ -405,6 +416,8 @@ button{
 let bossData = {};
 let isAdmin = false;
 const ADMIN_PASSWORD = "1234"; // change this
+let audioCtx = null;
+
 
 // 🔔 NOTIFICATION SYSTEM
 let notifiedBosses = {};
@@ -498,7 +511,35 @@ function formatTODDisplay(tod){
 
 }
 
+function playBeep(times = 3){
 
+    if(!audioCtx) return; // ❗ if not unlocked yet
+
+    let count = 0;
+
+    function beep(){
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.frequency.value = 1200; // 🔥 nicer sound
+        osc.type = "square"; // 🔥 game-like beep
+
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+
+        count++;
+        if(count < times){
+            setTimeout(beep, 220);
+        }
+    }
+
+    beep();
+}
 
 
 function loginAdmin(){
@@ -714,6 +755,10 @@ if(n){
     if(minutesLeft > 10){
         notifiedBosses[b.name] = false;
     }
+    
+    if(minutesLeft > 10){
+    notifiedBosses[b.name + "_alive"] = false;
+   } 
 }
 
 
@@ -725,26 +770,40 @@ if(n){
     let hoursLeft = diff / 3600;
 
     if(diff <= 0 && diff >= -aliveWindow){
-        status = "ALIVE";
-        row.classList.add("alive");
-        showToday = true;
+    status = "ALIVE";
+    row.classList.add("alive");
+    showToday = true;
+
+    // 🔊 PLAY BEEP ON SPAWN (ONLY ONCE)
+    if(!notifiedBosses[b.name + "_alive"]){
+        playBeep(3);
+        notifiedBosses[b.name + "_alive"] = true;
     }
-    else if(diff > 0 && diff <= 300){
-        status = "SOON";
-        row.classList.add("soon");
-        showToday = true;
-    }
-    else if(hoursLeft <= 24 && hoursLeft > 0){
-        status = "TODAY";
-        row.classList.add("today");
-        showToday = true;
-    }
-    else{
-        status = "WAIT";
-    }
+}
+else if(diff > 0 && diff <= 300){
+    status = "SOON";
+    row.classList.add("soon");
+    showToday = true;
+}
+else if(n.toDateString() === new Date().toDateString()){
+    status = "TODAY";
+    row.classList.add("today");
+    showToday = true;
+}
+else if(n.toDateString() === new Date(Date.now() + 86400000).toDateString()){
+    status = "TOMORROW"; // 👈 PASTE HERE
+    row.classList.add("tomorrow");
+}
+else if(hoursLeft <= 24 && hoursLeft > 0){
+    status = "SOON";
+}
+else{
+    status = "SCHEDULED"; // 👈 best choice
+}
 
     // ✅ ONLY ONE PUSH
-    if(showToday){
+    if(showToday && n.toDateString() === new Date().toDateString()){
+
         todayList.push({
             name: b.name,
             time: n,
@@ -752,6 +811,8 @@ if(n){
             diff: diff
         });
     }
+
+
 }
 
     let sEl = document.getElementById("s_"+b.name);
@@ -800,7 +861,7 @@ let box=document.getElementById("todayBox");
 
 box.innerHTML=`
 <div style="margin-bottom:8px; font-size:13px; color:#aaa; letter-spacing:1px;">
-    BOSS RESPAWNS TODAY
+    Bosses Respawning Today
 </div>
 
 <div class="today-header">
@@ -861,6 +922,20 @@ function sendPushToAll(message){
 
 }
 setInterval(update,1000);
+
+// 🔊 ENABLE AUDIO AFTER USER CLICK
+document.addEventListener("click", () => {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+    }
+
+    console.log("🔊 Audio unlocked");
+}, { once: true });
+
 </script>
 
 <!-- FIREBASE -->
