@@ -573,7 +573,7 @@ function saveTOD(name, value){
         tod: utc,
         editedBy: currentUser,
         role: userRole,
-        time: new Date().toISOString()
+        time: getNowInTZ().toISOString()
     });
 }
 
@@ -684,7 +684,7 @@ function loginAdmin(){
 function nextInterval(tod, h){
     if(!tod) return null;
 
-    let now = new Date();
+    let now = getNowInTZ();
     let d = new Date(tod);
 
     // 🚨 invalid date protection
@@ -705,13 +705,13 @@ function nextInterval(tod, h){
 
 function nextSchedule(times){
 
-    let now = new Date();
+    let now = getNowInTZ();
     let aliveWindow = 5 * 60 * 1000; // 5 minutes
 
     let allTimes = times.map(([day, t]) => {
 
         let [h, m] = t.split(":");
-        let d = new Date();
+        let d = getNowInTZ();
 
         let diff = DAY_MAP[day] - d.getDay();
         if (diff < 0) diff += 7;
@@ -763,7 +763,7 @@ function format(d){
 
 function cd(n){
     if(!n) return "--";
-    let diff=(n-new Date())/1000;
+    let diff = (n - getNowInTZ()) / 1000;
     if(diff<=0) return "ALIVE";
     let h=Math.floor(diff/3600);
     let m=Math.floor(diff%3600/60);
@@ -807,13 +807,14 @@ build("KRANSIA",kransiaBosses.map(([n,t])=>({name:n,times:t,type:"fix"})),kransi
 
 // ===== NOW BUTTON =====
 function setNow(name){
-    let d = new Date();
-
-    let year = d.getFullYear();
-    let month = String(d.getMonth()+1).padStart(2,"0");
-    let day = String(d.getDate()).padStart(2,"0");
-    let hour = String(d.getHours()).padStart(2,"0");
-    let min = String(d.getMinutes()).padStart(2,"0");
+    let now = new Date();
+    let tzNow = new Date(now.toLocaleString("en-US", { timeZone: selectedTZ })
+    );
+    let year = tzNow.getFullYear();
+    let month = String(tzNow.getMonth()+1).padStart(2,"0");
+    let day = String(tzNow.getDate()).padStart(2,"0");
+    let hour = String(tzNow.getHours()).padStart(2,"0");
+    let min = String(tzNow.getMinutes()).padStart(2,"0");
 
     let value = `${year}-${month}-${day}T${hour}:${min}`;
 
@@ -826,7 +827,7 @@ function update(){
 
 let allBosses = [];
 let todayList = [];
-let today = new Date().getDay();
+let today = getNowInTZ().getDay();
 
 [
     ...dynamicBosses.map(b => ({
@@ -856,7 +857,7 @@ if(n){
     row.classList.remove("alive","today","soon","next","blink");
 
 
-    let diff=n?(n-new Date())/1000:null;
+    let diff=n?(n-getNowInTZ())/1000:null;
     
 
 
@@ -882,7 +883,7 @@ else if(diff > 0 && diff <= 300){
     row.classList.add("soon");
     showToday = true;
 }
-else if(n.toDateString() === new Date().toDateString()){
+else if(n.toDateString() === getNowInTZ().toDateString()){
     status = "TODAY";
     row.classList.add("today");
     showToday = true;
@@ -899,7 +900,7 @@ else{
 }
 
     // ✅ ONLY ONE PUSH
-    if(showToday && n.toDateString() === new Date().toDateString()){
+    if(showToday && n.toDateString() === getNowInTZ().toDateString()){
 
         todayList.push({
             name: b.name,
@@ -961,7 +962,7 @@ if(logEl){
 // 🔔 BEEP LOGIC (FIXED & RELIABLE)
 if(n){
 
-    let diffMs = n - new Date();
+    let diffMs = n - getNowInTZ();
     let minutesLeft = diffMs / 60000;
 
     // 🔊 trigger between 5:00 minutes
@@ -1095,26 +1096,6 @@ volumeSlider.addEventListener("input", () => {
     volumeLevel = parseFloat(volumeSlider.value);
 });
 
-// 🔊 BEEP FUNCTION (UPDATE YOUR EXISTING ONE)
-function playBeep(times = 1){
-    if(!audioCtx || !soundEnabled) return;
-
-    for(let i = 0; i < times; i++){
-        setTimeout(() => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
-            osc.frequency.value = 1200;
-            gain.gain.value = volumeLevel;
-
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.15);
-        }, i * 200);
-    }
-}
 
 
 // ✅ TIMEZONE INIT (RUN ONCE ONLY)
@@ -1132,6 +1113,12 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
 });
+
+const getNowInTZ = () => {
+    return new Date(
+        new Date().toLocaleString("en-US", { timeZone: selectedTZ })
+    );
+};
 
 
 
