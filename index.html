@@ -807,7 +807,6 @@ build("KRANSIA",kransiaBosses.map(([n,t])=>({name:n,times:t,type:"fix"})),kransi
 
 // ===== NOW BUTTON =====
 function setNow(name){
-    let d = new Date();
     let tzNow = new Date(now.toLocaleString("en-US", { timeZone: selectedTZ })
     );
     let year = tzNow.getFullYear();
