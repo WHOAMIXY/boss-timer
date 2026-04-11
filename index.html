@@ -131,6 +131,7 @@ body{
 
 /* 🔥 DARK OVERLAY (PUT RIGHT UNDER body) */
 body::before{
+    pointer-events:none;
     content:"";
     position:fixed;
     inset:0;
@@ -508,8 +509,20 @@ function sendNotification(title, body){
     }
 }
 
+function isSameDay(d1, d2){
+    return d1.toLocaleDateString("en-US", { timeZone: selectedTZ }) ===
+           d2.toLocaleDateString("en-US", { timeZone: selectedTZ });
+}
+
+function getTomorrow(){
+    let d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d;
+}
+
+
 // call once when page loads
-requestNotificationPermission();
+
 
 
 // ===== DATA =====
@@ -563,9 +576,7 @@ function saveTOD(name, value){
         return;
     }
 
-    let local = new Date(value);
-
-    let utc = new Date(local.getTime() - local.getTimezoneOffset()*60000).toISOString();
+let utc = new Date(value).getTime();
 
     db.ref("bosses/" + name).set(utc);
 
@@ -611,14 +622,18 @@ function formatForInput(tod){
     let d = new Date(tod);
     if(isNaN(d)) return "";
 
-    let local = new Date(d.getTime() - d.getTimezoneOffset()*60000);
-    return local.toISOString().slice(0,16);
+    // ✅ Convert UTC → LOCAL correctly
+    let year = d.getFullYear();
+    let month = String(d.getMonth()+1).padStart(2,"0");
+    let day = String(d.getDate()).padStart(2,"0");
+    let hour = String(d.getHours()).padStart(2,"0");
+    let min = String(d.getMinutes()).padStart(2,"0");
+
+    return `${year}-${month}-${day}T${hour}:${min}`;
 }
 
-
 function playBeep(times = 3){
-    if(!audioCtx) return;
-
+    if(!audioCtx || !soundEnabled) return;
     for(let i = 0; i < times; i++){
         setTimeout(() => {
             const osc = audioCtx.createOscillator();
@@ -627,7 +642,7 @@ function playBeep(times = 3){
             osc.type = "square"; // sharper/louder
             osc.frequency.value = 1000;
 
-            gain.gain.value = 1; // 🔊 volume (0.5–1 = loud)
+            gain.gain.value = volumeLevel; // 🔊 volume (0.5–1 = loud)
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -707,13 +722,12 @@ function nextInterval(tod, h){
 function nextSchedule(times){
 
     let now = getNowInTZ();
-    let aliveWindow = 5 * 60 * 1000; // 5 minutes
+    let aliveWindow = 30 * 60 * 1000; // 30 minutes
 
     let allTimes = times.map(([day, t]) => {
 
         let [h, m] = t.split(":");
         let d = getNowInTZ();
-
         let diff = DAY_MAP[day] - d.getDay();
         if (diff < 0) diff += 7;
 
@@ -742,10 +756,10 @@ function nextSchedule(times){
 }
 
     // ✅ ALL PASSED → next week
-    let nextWeek = new Date(allTimes[0]);
-    nextWeek.setDate(nextWeek.getDate() + 7);
+    let next = new Date(allTimes[0]);
+    next.setDate(next.getDate() + 7);
 
-    return nextWeek;
+    return next;
 }
 
 
@@ -808,19 +822,26 @@ build("KRANSIA",kransiaBosses.map(([n,t])=>({name:n,times:t,type:"fix"})),kransi
 
 // ===== NOW BUTTON =====
 function setNow(name){
-    let tzNow = new Date(now.toLocaleString("en-US", { timeZone: selectedTZ })
-    );
-    let year = tzNow.getFullYear();
-    let month = String(tzNow.getMonth()+1).padStart(2,"0");
-    let day = String(tzNow.getDate()).padStart(2,"0");
-    let hour = String(tzNow.getHours()).padStart(2,"0");
-    let min = String(tzNow.getMinutes()).padStart(2,"0");
 
-    let value = `${year}-${month}-${day}T${hour}:${min}`;
+    if(!currentUser){
+        alert("Login first!");
+        return;
+    }
 
-    saveTOD(name, value);
+    const ref = db.ref("bosses/" + name);
+
+    // 🔥 use Firebase server time (accurate for everyone)
+    ref.set(firebase.database.ServerValue.TIMESTAMP);
+
+    // 🔥 log using server time
+    db.ref("logs").push({
+        boss: name,
+        tod: firebase.database.ServerValue.TIMESTAMP,
+        editedBy: currentUser,
+        role: userRole,
+        time: firebase.database.ServerValue.TIMESTAMP
+    });
 }
-
 
 // ===== UPDATE =====
 function update(){
@@ -861,6 +882,8 @@ if(n){
     
 
 
+let status = "ALIVE";
+
 if(n){
     let aliveWindow = 1800;
 
@@ -868,40 +891,38 @@ if(n){
     let hoursLeft = diff / 3600;
 
     if(diff <= 0 && diff >= -aliveWindow){
-    status = "ALIVE";
-    row.classList.add("alive");
-    showToday = true;
+        status = "ALIVE";
+        row.classList.add("alive");
+        showToday = true;
 
-    // 🔊 PLAY BEEP ON SPAWN (ONLY ONCE)
-    if(!notifiedBosses[b.name + "_alive"]){
-        playBeep(3);
-        notifiedBosses[b.name + "_alive"] = true;
+        if(!notifiedBosses[b.name + "_alive"]){
+            playBeep(3);
+            notifiedBosses[b.name + "_alive"] = true;
+        }
     }
-}
-else if(diff > 0 && diff <= 300){
-    status = "SOON";
-    row.classList.add("soon");
-    showToday = true;
-}
-else if(n.toDateString() === getNowInTZ().toDateString()){
-    status = "TODAY";
-    row.classList.add("today");
-    showToday = true;
-}
-else if(n.toDateString() === new Date(Date.now() + 86400000).toDateString()){
-    status = "TOMORROW"; // 👈 PASTE HERE
-    row.classList.add("tomorrow");
-}
-else if(hoursLeft <= 24 && hoursLeft > 0){
-    status = "SOON";
-}
-else{
-    status = "SCHEDULED"; // 👈 best choice
-}
+    else if(diff > 0 && diff <= 300){
+        status = "SOON";
+        row.classList.add("soon");
+        showToday = true;
+    }
+    else if(isSameDay(n, getNowInTZ())){
+        status = "TODAY";
+        row.classList.add("today");
+        showToday = true;
+    }
+    else if(isSameDay(n, getTomorrow())){
+        status = "TOMORROW";
+        row.classList.add("tomorrow");
+    }
+    else if(hoursLeft <= 24 && hoursLeft > 0){
+        status = "SOON";
+    }
+    else{
+        status = "SCHEDULED";
+    }
 
-    // ✅ ONLY ONE PUSH
-    if(showToday && n.toDateString() === getNowInTZ().toDateString()){
-
+    // ✅ ONLY ONE PUSH (FIXED)
+    if(showToday && isSameDay(n, getNowInTZ())){
         todayList.push({
             name: b.name,
             time: n,
@@ -909,10 +930,7 @@ else{
             diff: diff
         });
     }
-
-
 }
-
     let sEl = document.getElementById("s_"+b.name);
 sEl.innerText = status;
 sEl.className = "status " + status.toLowerCase();
@@ -1097,6 +1115,22 @@ volumeSlider.addEventListener("input", () => {
 });
 
 
+
+// ✅ TIMEZONE INIT (RUN ONCE ONLY)
+window.addEventListener("DOMContentLoaded", () => {
+
+    const tzSelect = document.getElementById("timezoneSelect");
+
+    if(tzSelect){
+        tzSelect.value = selectedTZ;
+
+        tzSelect.addEventListener("change", (e)=>{
+            selectedTZ = e.target.value;
+            update();
+        });
+    }
+
+});
 
 // ✅ TIMEZONE INIT (RUN ONCE ONLY)
 window.addEventListener("DOMContentLoaded", () => {
